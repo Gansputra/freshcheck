@@ -2,19 +2,37 @@ export type FreshnessClass = 'Fresh' | 'Semi-Fresh' | 'Rotten';
 
 export type FruitClass =
   | 'Apple'
-  | 'Banana'
-  | 'Grape'
+  | 'Cherry'
+  | 'DragonFruit'
+  | 'Fig'
+  | 'Lemon'
+  | 'Lime'
+  | 'Lychee'
+  | 'Mango'
   | 'Orange'
+  | 'Peach'
   | 'Pineapple'
-  | 'Watermelon';
+  | 'Tomato'
+  | 'Watermelon'
+  | 'Banana'
+  | 'Grape';
 
 export const FRUIT_CLASSES: readonly FruitClass[] = [
   'Apple',
+  'Cherry',
+  'DragonFruit',
+  'Fig',
+  'Lemon',
+  'Lime',
+  'Lychee',
+  'Mango',
+  'Orange',
+  'Peach',
+  'Pineapple',
+  'Tomato',
+  'Watermelon',
   'Banana',
   'Grape',
-  'Orange',
-  'Pineapple',
-  'Watermelon',
 ] as const;
 
 export interface ModelConfig {
@@ -93,6 +111,9 @@ export interface PipelineResult {
   imageWidth: number;
   imageHeight: number;
   noFruitsDetected: boolean;
+  rawDetectionCount?: number;
+  filteredDetectionCount?: number;
+  nmsDetectionCount?: number;
 }
 
 export interface DualModelStatus {

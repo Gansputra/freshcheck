@@ -44,15 +44,26 @@ export function useFruitDetectionPipeline(options: UsePipelineOptions = {}) {
   const intervalIdRef = useRef<NodeJS.Timeout | null>(null);
   const configRef = useRef(pipelineConfig);
   configRef.current = pipelineConfig;
+  const modelStatusRef = useRef(modelStatus);
+  modelStatusRef.current = modelStatus;
+  const initPromiseRef = useRef<Promise<void> | null>(null);
 
-  // Initialize both ONNX models once (singleton pattern)
+  // Initialize both ONNX models on demand (lazy singleton pattern)
   const initModels = useCallback(async () => {
-    setModelStatus({
-      yolo: 'loading',
-      mobilenet: 'loading',
+    if (modelStatusRef.current.overall === 'ready') {
+      return;
+    }
+    if (initPromiseRef.current) {
+      return await initPromiseRef.current;
+    }
+
+    setModelStatus((prev) => ({
+      ...prev,
       overall: 'loading',
+      yolo: prev.yolo === 'ready' ? 'ready' : 'loading',
+      mobilenet: prev.mobilenet === 'ready' ? 'ready' : 'loading',
       errorMessage: null,
-    });
+    }));
     setProgress({
       stage: 'loading_models',
       currentCrop: 0,
@@ -60,44 +71,51 @@ export function useFruitDetectionPipeline(options: UsePipelineOptions = {}) {
       message: 'Loading YOLOv8s and MobileNetV3 models...',
     });
 
-    try {
-      // 1. Initialize YOLO
-      await getYoloSession();
-      setModelStatus((prev) => ({ ...prev, yolo: 'ready' }));
+    initPromiseRef.current = (async () => {
+      try {
+        // 1. Initialize YOLO
+        await getYoloSession();
+        setModelStatus((prev) => ({ ...prev, yolo: 'ready' }));
 
-      // 2. Initialize MobileNetV3
-      await getInferenceSession();
-      setModelStatus((prev) => ({
-        ...prev,
-        mobilenet: 'ready',
-        overall: 'ready',
-        errorMessage: null,
-      }));
+        // 2. Initialize MobileNetV3
+        await getInferenceSession();
+        setModelStatus((prev) => ({
+          ...prev,
+          mobilenet: 'ready',
+          overall: 'ready',
+          errorMessage: null,
+        }));
 
-      setProgress({
-        stage: 'idle',
-        currentCrop: 0,
-        totalCrops: 0,
-        message: 'Models loaded and ready for scanning.',
-      });
-    } catch (err: unknown) {
-      const error = err as Error;
-      console.error('Model initialization error:', error);
-      setModelStatus({
-        yolo: 'error',
-        mobilenet: 'error',
-        overall: 'error',
-        errorMessage:
-          error.message ||
-          'Failed to load ONNX models. Please verify yolov8s_best.onnx and freshcheck_mobilenetv3.onnx in public/models/.',
-      });
-      setProgress({
-        stage: 'error',
-        currentCrop: 0,
-        totalCrops: 0,
-        message: 'Error loading models.',
-      });
-    }
+        setProgress({
+          stage: 'idle',
+          currentCrop: 0,
+          totalCrops: 0,
+          message: 'Models loaded and ready for scanning.',
+        });
+      } catch (err: unknown) {
+        const error = err as Error;
+        console.error('Model initialization error:', error);
+        setModelStatus({
+          yolo: 'error',
+          mobilenet: 'error',
+          overall: 'error',
+          errorMessage:
+            error.message ||
+            'Failed to load ONNX models. Please verify freshcheck_v21_yolov8s.onnx and freshcheck_mobilenetv3.onnx in public/models/.',
+        });
+        setProgress({
+          stage: 'error',
+          currentCrop: 0,
+          totalCrops: 0,
+          message: 'Error loading models.',
+        });
+        throw error;
+      } finally {
+        initPromiseRef.current = null;
+      }
+    })();
+
+    return await initPromiseRef.current;
   }, []);
 
   // Execute pipeline on a single image or video frame
@@ -114,6 +132,11 @@ export function useFruitDetectionPipeline(options: UsePipelineOptions = {}) {
       try {
         isInferringRef.current = true;
         setIsInferring(true);
+
+        // Ensure models are initialized on demand
+        if (modelStatusRef.current.overall !== 'ready') {
+          await initModels();
+        }
 
         const pipelineRes = await runFruitDetectionPipeline(
           source,

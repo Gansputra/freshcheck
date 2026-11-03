@@ -62,11 +62,6 @@ export const CameraScanner: React.FC = () => {
     }
   }, []);
 
-  // Initialize both ONNX models on mount (singleton session)
-  useEffect(() => {
-    initModels();
-  }, [initModels]);
-
   // Manage continuous inference when camera stream is active and in camera mode
   useEffect(() => {
     if (cameraStatus === 'active' && videoRef.current && activeTab === 'camera') {
@@ -97,6 +92,8 @@ export const CameraScanner: React.FC = () => {
   };
 
   const handleStartCamera = async () => {
+    // Lazily warm up models in background when user explicitly starts the camera
+    initModels().catch((err) => console.error('Model init error on start camera:', err));
     await startCamera();
   };
 
@@ -186,7 +183,7 @@ export const CameraScanner: React.FC = () => {
             {modelStatus.errorMessage || 'Pastikan file ONNX berada di folder public/models/.'}
           </p>
           <div className="text-xs text-rose-800 bg-white/70 p-3 rounded-lg border border-rose-200/60 font-mono">
-            File yang dibutuhkan: public/models/yolov8s_best.onnx &amp; public/models/freshcheck_mobilenetv3.onnx
+            File yang dibutuhkan: public/models/freshcheck_v21_yolov8s.onnx &amp; public/models/freshcheck_mobilenetv3.onnx
           </div>
         </div>
       )}
@@ -256,8 +253,34 @@ export const CameraScanner: React.FC = () => {
           </button>
         </div>
 
-        {/* Pipeline Settings Toggle */}
+        {/* Model Status Pill & Settings Toggle */}
         <div className="flex items-center gap-2 self-end sm:self-auto">
+          {modelStatus.overall === 'uninitialized' && (
+            <button
+              onClick={() => initModels()}
+              className="inline-flex items-center gap-1.5 px-3 py-2 rounded-xl text-xs font-medium border border-navy-200 bg-white text-navy-600 hover:text-forest-700 hover:border-forest-300 hover:bg-forest-50/50 transition-colors"
+              title="Model AI akan dimuat otomatis saat mulai scan atau unggah foto. Klik di sini untuk memuat lebih awal."
+            >
+              <Cpu className="w-3.5 h-3.5 text-navy-400" />
+              <span className="hidden sm:inline">Model: On-Demand</span>
+              <span className="sm:hidden">On-Demand</span>
+            </button>
+          )}
+
+          {modelStatus.overall === 'loading' && (
+            <div className="inline-flex items-center gap-1.5 px-3 py-2 rounded-xl text-xs font-medium border border-amber-200 bg-amber-50 text-amber-800">
+              <RefreshCw className="w-3.5 h-3.5 text-amber-600 animate-spin" />
+              <span>Memuat Model...</span>
+            </div>
+          )}
+
+          {modelStatus.overall === 'ready' && (
+            <div className="inline-flex items-center gap-1.5 px-3 py-2 rounded-xl text-xs font-medium border border-emerald-200 bg-emerald-50 text-emerald-800">
+              <CheckCircle2 className="w-3.5 h-3.5 text-emerald-600" />
+              <span>Model Siap</span>
+            </div>
+          )}
+
           <button
             onClick={() => setShowSettings(!showSettings)}
             className={`inline-flex items-center gap-1.5 px-3 py-2 rounded-xl text-xs font-medium border transition-colors ${
@@ -327,8 +350,8 @@ export const CameraScanner: React.FC = () => {
                 />
               </div>
               <p className="text-[11px] text-navy-500 leading-snug">
-                Jika dicentang, buah yang belum memiliki dataset kesegaran tervalidasi (Grape,
-                Pineapple, Watermelon) tidak akan dievaluasi oleh MobileNetV3.
+                Jika dicentang, 12 spesies buah di luar Apple, Banana &amp; Orange yang belum memiliki
+                dataset kesegaran tervalidasi tidak akan dievaluasi oleh MobileNetV3.
               </p>
             </div>
           </div>
@@ -467,12 +490,12 @@ export const CameraScanner: React.FC = () => {
             <div className="space-y-2 text-xs">
               <div className="p-2.5 rounded-lg bg-navy-50/70 border border-navy-100 flex items-center justify-between">
                 <div>
-                  <span className="font-bold text-navy-950 block">Stage 1: YOLOv8s</span>
+                  <span className="font-bold text-navy-950 block">Stage 1: YOLOv8s V2.1</span>
                   <span className="text-navy-500 text-[11px]">
-                    Letterbox 640×640 RGB • 6 Fruit Classes
+                    Letterbox 640×640 RGB • 15 Fruit Classes
                   </span>
                 </div>
-                <span className="text-[11px] font-mono font-bold text-forest-700">10 × 8400</span>
+                <span className="text-[11px] font-mono font-bold text-forest-700">19 × 8400</span>
               </div>
 
               <div className="p-2.5 rounded-lg bg-navy-50/70 border border-navy-100 flex items-center justify-between">
@@ -496,9 +519,9 @@ export const CameraScanner: React.FC = () => {
               <span>Batasan Ilmiah &amp; Cakupan Spesies:</span>
             </div>
             <p className="leading-relaxed text-amber-900">
-              Model klasifikasi kesegaran dilatih pada dataset buah tertentu (Apple, Banana, Orange).
-              Untuk buah jenis lain (Grape, Pineapple, Watermelon), status kesegaran bersifat
-              eksperimental dan tidak diklaim memiliki validasi laboratorium.
+              Model klasifikasi kesegaran MobileNetV3 divalidasi pada dataset buah tertentu (Apple, Banana, Orange).
+              Untuk jenis buah lain (Cherry, DragonFruit, Fig, Grape, Lemon, Lime, Lychee, Mango, Peach, Pineapple, Tomato, Watermelon),
+              status kesegaran bersifat eksperimental dan ditampilkan dengan badge Unverified Coverage.
             </p>
           </div>
         </div>

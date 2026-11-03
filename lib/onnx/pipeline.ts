@@ -115,7 +115,12 @@ export async function runFruitDetectionPipeline(
   }
 
   const rawYoloData = yoloOutputTensor.data as Float32Array;
-  const rawDetections = decodeYoloOutput(
+  const {
+    detections: rawDetections,
+    rawCount,
+    filteredCount,
+    nmsCount,
+  } = decodeYoloOutput(
     rawYoloData,
     scale,
     padX,
@@ -147,6 +152,9 @@ export async function runFruitDetectionPipeline(
       imageWidth: sourceWidth,
       imageHeight: sourceHeight,
       noFruitsDetected: true,
+      rawDetectionCount: rawCount,
+      filteredDetectionCount: filteredCount,
+      nmsDetectionCount: 0,
     };
   }
 
@@ -239,6 +247,9 @@ export async function runFruitDetectionPipeline(
     imageWidth: sourceWidth,
     imageHeight: sourceHeight,
     noFruitsDetected: false,
+    rawDetectionCount: rawCount,
+    filteredDetectionCount: filteredCount,
+    nmsDetectionCount: nmsCount,
   };
 }
 

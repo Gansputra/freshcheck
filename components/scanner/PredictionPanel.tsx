@@ -1,6 +1,7 @@
 import React from 'react';
 import {
   DetectedFruit,
+  FRUIT_CLASSES,
   FreshnessClass,
   PipelineProgress,
   PipelineResult,
@@ -29,11 +30,20 @@ interface PredictionPanelProps {
 
 const FRUIT_EMOJIS: Record<string, string> = {
   Apple: '🍎',
+  Cherry: '🍒',
+  DragonFruit: '🐉',
+  Fig: '🫐',
+  Lemon: '🍋',
+  Lime: '🍈',
+  Lychee: '🍓',
+  Mango: '🥭',
+  Orange: '🍊',
+  Peach: '🍑',
+  Pineapple: '🍍',
+  Tomato: '🍅',
+  Watermelon: '🍉',
   Banana: '🍌',
   Grape: '🍇',
-  Orange: '🍊',
-  Pineapple: '🍍',
-  Watermelon: '🍉',
 };
 
 export const PredictionPanel: React.FC<PredictionPanelProps> = ({
@@ -120,14 +130,13 @@ export const PredictionPanel: React.FC<PredictionPanelProps> = ({
           cukup pencahayaan.
         </p>
         <div className="p-3 bg-navy-50 rounded-xl border border-navy-100 text-xs text-navy-700 w-full max-w-xs space-y-1">
-          <span className="font-semibold text-navy-900 block">Buah yang Didukung:</span>
-          <div className="flex flex-wrap items-center justify-center gap-1.5 pt-1">
-            <span className="px-2 py-0.5 rounded bg-white border border-navy-200 font-medium">🍎 Apple</span>
-            <span className="px-2 py-0.5 rounded bg-white border border-navy-200 font-medium">🍌 Banana</span>
-            <span className="px-2 py-0.5 rounded bg-white border border-navy-200 font-medium">🍇 Grape</span>
-            <span className="px-2 py-0.5 rounded bg-white border border-navy-200 font-medium">🍊 Orange</span>
-            <span className="px-2 py-0.5 rounded bg-white border border-navy-200 font-medium">🍍 Pineapple</span>
-            <span className="px-2 py-0.5 rounded bg-white border border-navy-200 font-medium">🍉 Watermelon</span>
+          <span className="font-semibold text-navy-900 block">15 Buah yang Didukung:</span>
+          <div className="flex flex-wrap items-center justify-center gap-1.5 pt-1 max-h-24 overflow-y-auto">
+            {FRUIT_CLASSES.map((fc) => (
+              <span key={fc} className="px-2 py-0.5 rounded bg-white border border-navy-200 font-medium text-[11px]">
+                {FRUIT_EMOJIS[fc] || '🍎'} {fc}
+              </span>
+            ))}
           </div>
         </div>
 
@@ -286,6 +295,11 @@ export const PredictionPanel: React.FC<PredictionPanelProps> = ({
         <div className="flex flex-wrap items-center justify-between gap-2 text-[11px] text-navy-500 font-mono">
           <span>YOLOv8s: {pipelineResult.yoloInferenceTimeMs}ms</span>
           <span>MobileNetV3: {pipelineResult.freshnessInferenceTimeMs}ms</span>
+          {pipelineResult.filteredDetectionCount !== undefined && (
+            <span>
+              Anchors: 8400 → {pipelineResult.filteredDetectionCount} conf → {pipelineResult.detectedFruits.length} NMS
+            </span>
+          )}
           <span>Total: {pipelineResult.totalTimeMs}ms</span>
         </div>
 

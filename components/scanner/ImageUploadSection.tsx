@@ -30,11 +30,20 @@ interface ImageUploadSectionProps {
 
 const FRUIT_EMOJIS: Record<string, string> = {
   Apple: '🍎',
+  Cherry: '🍒',
+  DragonFruit: '🐉',
+  Fig: '🫐',
+  Lemon: '🍋',
+  Lime: '🍈',
+  Lychee: '🍓',
+  Mango: '🥭',
+  Orange: '🍊',
+  Peach: '🍑',
+  Pineapple: '🍍',
+  Tomato: '🍅',
+  Watermelon: '🍉',
   Banana: '🍌',
   Grape: '🍇',
-  Orange: '🍊',
-  Pineapple: '🍍',
-  Watermelon: '🍉',
 };
 
 export const ImageUploadSection: React.FC<ImageUploadSectionProps> = ({
@@ -291,6 +300,13 @@ export const ImageUploadSection: React.FC<ImageUploadSectionProps> = ({
 
                   const emoji = FRUIT_EMOJIS[fruit.fruitClass] || '🍏';
 
+                  // Prevent badge clipping at image top & right boundaries
+                  const isNearTop = ry1 < 0.12;
+                  const isNearRight = rx1 > 0.68;
+                  const badgePositionClass = isNearTop
+                    ? `top-1.5 ${isNearRight ? 'right-1.5' : 'left-1.5'}`
+                    : `-top-9 ${isNearRight ? 'right-0' : 'left-0'}`;
+
                   return (
                     <div
                       key={fruit.id || idx}
@@ -298,11 +314,17 @@ export const ImageUploadSection: React.FC<ImageUploadSectionProps> = ({
                       className={`absolute border-2 rounded-xl transition-all duration-200 cursor-pointer ${border} ${
                         isSelected ? 'ring-4 ring-white/50 scale-[1.01]' : 'hover:scale-[1.005]'
                       }`}
-                      style={{ left, top, width, height }}
+                      style={{
+                        left,
+                        top,
+                        width,
+                        height,
+                        zIndex: isSelected ? 30 : 10 + (idx % 10),
+                      }}
                     >
                       {/* Floating Badge */}
                       <div
-                        className={`absolute -top-10 left-0 flex items-center gap-2 px-2.5 py-1 rounded-lg backdrop-blur-md border shadow-lg text-xs whitespace-nowrap ${badge}`}
+                        className={`absolute ${badgePositionClass} flex items-center gap-2 px-2.5 py-1 rounded-lg backdrop-blur-md border shadow-lg text-xs whitespace-nowrap ${badge}`}
                       >
                         <span>{emoji}</span>
                         <span className="font-bold">{fruit.fruitClass}</span>

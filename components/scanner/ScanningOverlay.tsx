@@ -2,6 +2,7 @@ import React from 'react';
 import {
   CameraStatus,
   DetectedFruit,
+  FRUIT_CLASSES,
   PipelineProgress,
   PipelineResult,
 } from '@/types/freshcheck';
@@ -29,11 +30,20 @@ interface ScanningOverlayProps {
 
 const FRUIT_EMOJIS: Record<string, string> = {
   Apple: '🍎',
+  Cherry: '🍒',
+  DragonFruit: '🐉',
+  Fig: '🫐',
+  Lemon: '🍋',
+  Lime: '🍈',
+  Lychee: '🍓',
+  Mango: '🥭',
+  Orange: '🍊',
+  Peach: '🍑',
+  Pineapple: '🍍',
+  Tomato: '🍅',
+  Watermelon: '🍉',
   Banana: '🍌',
   Grape: '🍇',
-  Orange: '🍊',
-  Pineapple: '🍍',
-  Watermelon: '🍉',
 };
 
 export const ScanningOverlay: React.FC<ScanningOverlayProps> = ({
@@ -53,7 +63,7 @@ export const ScanningOverlay: React.FC<ScanningOverlayProps> = ({
         </div>
         <h3 className="text-xl font-bold text-white mb-2">Camera Scanner Ready</h3>
         <p className="text-sm text-navy-300 max-w-sm mb-6 leading-relaxed">
-          Aktifkan kamera untuk mendeteksi buah (Apple, Banana, Grape, Orange, Pineapple, Watermelon)
+          Aktifkan kamera untuk mendeteksi 15 jenis buah (Apple, Banana, Mango, Orange, Tomato, dll)
           dan klasifikasi kesegarannya secara real-time.
         </p>
         <button
@@ -150,6 +160,13 @@ export const ScanningOverlay: React.FC<ScanningOverlayProps> = ({
 
           const emoji = FRUIT_EMOJIS[fruit.fruitClass] || '🍏';
 
+          // Prevent badge from being clipped outside viewport top or right edge
+          const isNearTop = topPercent < 12;
+          const isNearRight = leftPercent > 68;
+          const badgePositionClass = isNearTop
+            ? `top-1.5 ${isNearRight ? 'right-1.5' : 'left-1.5'}`
+            : `-top-9 ${isNearRight ? 'right-0' : 'left-0'}`;
+
           return (
             <div
               key={fruit.id || idx}
@@ -159,6 +176,7 @@ export const ScanningOverlay: React.FC<ScanningOverlayProps> = ({
                 top: `${topPercent}%`,
                 width: `${widthPercent}%`,
                 height: `${heightPercent}%`,
+                zIndex: 10 + (idx % 10),
               }}
             >
               {/* Corner Brackets */}
@@ -177,7 +195,7 @@ export const ScanningOverlay: React.FC<ScanningOverlayProps> = ({
 
               {/* Floating Header Tag directly on the fruit box */}
               <div
-                className={`absolute -top-10 left-0 flex items-center gap-2 px-2.5 py-1 rounded-lg backdrop-blur-md border shadow-lg text-xs whitespace-nowrap ${badgeBg}`}
+                className={`absolute ${badgePositionClass} flex items-center gap-2 px-2.5 py-1 rounded-lg backdrop-blur-md border shadow-lg text-xs whitespace-nowrap ${badgeBg}`}
               >
                 <span className="text-sm">{emoji}</span>
                 <span className="font-bold uppercase tracking-wider">
@@ -230,13 +248,12 @@ export const ScanningOverlay: React.FC<ScanningOverlayProps> = ({
             <p className="text-xs text-navy-200">
               Tidak ada buah terdeteksi. Arahkan kamera ke salah satu buah yang didukung:
             </p>
-            <div className="pt-1 flex flex-wrap items-center justify-center gap-1.5 text-xs text-white">
-              <span className="px-2 py-0.5 rounded bg-white/10">🍎 Apple</span>
-              <span className="px-2 py-0.5 rounded bg-white/10">🍌 Banana</span>
-              <span className="px-2 py-0.5 rounded bg-white/10">🍇 Grape</span>
-              <span className="px-2 py-0.5 rounded bg-white/10">🍊 Orange</span>
-              <span className="px-2 py-0.5 rounded bg-white/10">🍍 Pineapple</span>
-              <span className="px-2 py-0.5 rounded bg-white/10">🍉 Watermelon</span>
+            <div className="pt-1 flex flex-wrap items-center justify-center gap-1.5 text-xs text-white max-h-24 overflow-y-auto">
+              {FRUIT_CLASSES.map((fc) => (
+                <span key={fc} className="px-2 py-0.5 rounded bg-white/10 text-[11px]">
+                  {FRUIT_EMOJIS[fc] || '🍎'} {fc}
+                </span>
+              ))}
             </div>
           </div>
         </div>

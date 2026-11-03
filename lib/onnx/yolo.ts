@@ -2,7 +2,8 @@ import * as ort from 'onnxruntime-web';
 import { FRUIT_CLASSES, FruitClass } from '@/types/freshcheck';
 import { configureOnnxEnv } from './session';
 
-export const YOLO_MODEL_URL = '/models/yolov8s_best.onnx';
+export const YOLO_MODEL_URL = '/models/freshcheck_v21_yolov8s.onnx';
+export const YOLO_METADATA_URL = '/models/freshcheck_v21_metadata.json';
 
 let yoloSessionInstance: ort.InferenceSession | null = null;
 let yoloInitPromise: Promise<ort.InferenceSession> | null = null;
@@ -59,19 +60,21 @@ export async function getYoloSession(): Promise<ort.InferenceSession> {
       const contentType = res.headers.get('content-type');
       if (contentType && contentType.includes('text/html')) {
         throw new Error(
-          'File model mengembalikan halaman HTML. Jika menggunakan Localtunnel, silakan selesaikan halaman verifikasi Localtunnel terlebih dahulu.'
+          'File model mengembalikan halaman HTML. Silakan selesaikan halaman verifikasi jaringan terlebih dahulu.'
         );
       }
 
       const buffer = await res.arrayBuffer();
-      console.log(`[FreshCheck] YOLOv8 model downloaded (${buffer.byteLength} bytes). Creating inference session...`);
+      console.log(
+        `[FreshCheck] YOLOv8s V2.1 model downloaded (${buffer.byteLength} bytes). Creating inference session...`
+      );
 
       const session = await ort.InferenceSession.create(buffer, {
         executionProviders: ['wasm'],
         graphOptimizationLevel: 'all',
       });
 
-      console.log('[FreshCheck] YOLOv8 inference session created successfully.');
+      console.log('[FreshCheck] YOLOv8s V2.1 inference session created successfully.');
       yoloSessionInstance = session;
       return session;
     } catch (err: unknown) {
@@ -152,6 +155,13 @@ export interface RawDetection {
   relativeBox: [number, number, number, number]; // [rx1, ry1, rx2, ry2] in 0..1 range
 }
 
+export interface YoloDecodeResult {
+  detections: RawDetection[];
+  rawCount: number;
+  filteredCount: number;
+  nmsCount: number;
+}
+
 /**
  * Calculates Intersection over Union (IoU) between two boxes [x1, y1, x2, y2]
  */
@@ -174,12 +184,18 @@ function computeIoU(
 }
 
 /**
- * Applies Non-Maximum Suppression (NMS) to eliminate duplicate overlapping boxes
+ * Applies enhanced Non-Maximum Suppression (NMS):
+ * 1. Intra-class NMS: eliminates duplicate overlapping boxes of the SAME class (iou > iouThreshold, default 0.45).
+ * 2. Cross-class duplicate suppression: eliminates lower-confidence multi-class crosstalk on the SAME physical fruit
+ *    (iou > crossClassIouThreshold, default 0.65). Prevents an apple from also getting ghost Peach or Tomato labels,
+ *    while cleanly preserving distinct nearby fruits whose IoU is typically < 0.35.
  */
-export function applyNMS(
+export function applyClassAwareNMS(
   detections: RawDetection[],
-  iouThreshold = 0.45
+  iouThreshold = 0.45,
+  crossClassIouThreshold = 0.65
 ): RawDetection[] {
+  // Sort descending by prediction confidence
   detections.sort((a, b) => b.score - a.score);
 
   const selected: RawDetection[] = [];
@@ -189,9 +205,19 @@ export function applyNMS(
 
     for (const chosen of selected) {
       const iou = computeIoU(candidate.box, chosen.box);
-      if (iou > iouThreshold) {
-        shouldKeep = false;
-        break;
+
+      if (candidate.classIndex === chosen.classIndex) {
+        // Same class duplicate
+        if (iou > iouThreshold) {
+          shouldKeep = false;
+          break;
+        }
+      } else {
+        // Cross-class duplicate on identical physical fruit
+        if (iou > crossClassIouThreshold) {
+          shouldKeep = false;
+          break;
+        }
       }
     }
 
@@ -203,9 +229,11 @@ export function applyNMS(
   return selected;
 }
 
+export const applyNMS = applyClassAwareNMS;
+
 /**
- * Decodes YOLO output tensor [1, 10, 8400] into coordinate-mapped detections.
- * 10 rows: [cx, cy, w, h, class0, class1, class2, class3, class4, class5]
+ * Decodes YOLO output tensor [1, 19, 8400] into coordinate-mapped detections.
+ * 19 rows: [cx, cy, w, h, class0, ..., class14] (15 classes from metadata)
  */
 export function decodeYoloOutput(
   outputData: Float32Array,
@@ -214,15 +242,16 @@ export function decodeYoloOutput(
   padY: number,
   origWidth: number,
   origHeight: number,
-  confThreshold = 0.35,
-  iouThreshold = 0.45
-): RawDetection[] {
+  confThreshold = 0.25,
+  iouThreshold = 0.45,
+  crossClassIouThreshold = 0.65
+): YoloDecodeResult {
   const numAnchors = 8400;
-  const numClasses = FRUIT_CLASSES.length; // 6
+  const numClasses = FRUIT_CLASSES.length; // 15 classes
   const candidates: RawDetection[] = [];
 
   for (let i = 0; i < numAnchors; i++) {
-    // 1. Find highest class score among the 6 classes
+    // 1. Find highest class score among the 15 classes
     let maxScore = 0;
     let bestClassIdx = 0;
 
@@ -276,5 +305,19 @@ export function decodeYoloOutput(
     });
   }
 
-  return applyNMS(candidates, iouThreshold);
+  const rawCount = numAnchors;
+  const filteredCount = candidates.length;
+  const detections = applyClassAwareNMS(candidates, iouThreshold, crossClassIouThreshold);
+  const nmsCount = detections.length;
+
+  console.log(
+    `[FreshCheck YOLO] Raw anchors: ${rawCount} | Conf (>= ${(confThreshold * 100).toFixed(0)}%): ${filteredCount} | Final after NMS: ${nmsCount}`
+  );
+
+  return {
+    detections,
+    rawCount,
+    filteredCount,
+    nmsCount,
+  };
 }

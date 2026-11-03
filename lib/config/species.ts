@@ -27,17 +27,71 @@ export const SPECIES_VALIDATION_MAP: Record<FruitClass, SpeciesValidationInfo> =
     statusLabel: 'Validated',
     notice: 'Dataset coverage verified for Citrus/Orange freshness classification.',
   },
+  Cherry: {
+    isValidated: false,
+    statusLabel: 'Unverified Coverage',
+    notice:
+      'Notice: Freshness classifier has not been scientifically validated for Cherry species. Predictions are experimental.',
+  },
+  DragonFruit: {
+    isValidated: false,
+    statusLabel: 'Unverified Coverage',
+    notice:
+      'Notice: Freshness classifier has not been scientifically validated for DragonFruit species. Predictions are experimental.',
+  },
+  Fig: {
+    isValidated: false,
+    statusLabel: 'Unverified Coverage',
+    notice:
+      'Notice: Freshness classifier has not been scientifically validated for Fig species. Predictions are experimental.',
+  },
   Grape: {
     isValidated: false,
     statusLabel: 'Unverified Coverage',
     notice:
       'Notice: Freshness classifier has not been scientifically validated for Grape species. Predictions are experimental.',
   },
+  Lemon: {
+    isValidated: false,
+    statusLabel: 'Unverified Coverage',
+    notice:
+      'Notice: Freshness classifier has not been scientifically validated for Lemon species. Predictions are experimental.',
+  },
+  Lime: {
+    isValidated: false,
+    statusLabel: 'Unverified Coverage',
+    notice:
+      'Notice: Freshness classifier has not been scientifically validated for Lime species. Predictions are experimental.',
+  },
+  Lychee: {
+    isValidated: false,
+    statusLabel: 'Unverified Coverage',
+    notice:
+      'Notice: Freshness classifier has not been scientifically validated for Lychee species. Predictions are experimental.',
+  },
+  Mango: {
+    isValidated: false,
+    statusLabel: 'Unverified Coverage',
+    notice:
+      'Notice: Freshness classifier has not been scientifically validated for Mango species. Predictions are experimental.',
+  },
+  Peach: {
+    isValidated: false,
+    statusLabel: 'Unverified Coverage',
+    notice:
+      'Notice: Freshness classifier has not been scientifically validated for Peach species. Predictions are experimental.',
+  },
   Pineapple: {
     isValidated: false,
     statusLabel: 'Unverified Coverage',
     notice:
       'Notice: Freshness classifier has not been scientifically validated for Pineapple species. Predictions are experimental.',
+  },
+  Tomato: {
+    isValidated: false,
+    statusLabel: 'Unverified Coverage',
+    notice:
+      'Notice: Freshness classifier has not been scientifically validated for Tomato species. Predictions are experimental.',
   },
   Watermelon: {
     isValidated: false,
@@ -57,7 +111,7 @@ export interface PipelineConfig {
 }
 
 export const DEFAULT_PIPELINE_CONFIG: PipelineConfig = {
-  confidenceThreshold: 0.35,
+  confidenceThreshold: 0.25,
   iouThreshold: 0.45,
   excludeUnvalidatedSpecies: false, // Default false: evaluates with prominent scientific notice
 };
@@ -74,4 +128,3 @@ export function getSpeciesValidation(fruitClass: FruitClass): SpeciesValidationI
     }
   );
 }
-

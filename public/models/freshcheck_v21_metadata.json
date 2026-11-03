@@ -1,0 +1,34 @@
+{
+  "model": "YOLOv8s",
+  "version": "FreshCheck V2.1",
+  "task": "detection",
+  "input_size": [
+    640,
+    640
+  ],
+  "input_channels": 3,
+  "color_order": "RGB",
+  "classes": [
+    "Apple",
+    "Cherry",
+    "DragonFruit",
+    "Fig",
+    "Lemon",
+    "Lime",
+    "Lychee",
+    "Mango",
+    "Orange",
+    "Peach",
+    "Pineapple",
+    "Tomato",
+    "Watermelon",
+    "Banana",
+    "Grape"
+  ],
+  "num_classes": 15,
+  "output_shape": [
+    1,
+    19,
+    8400
+  ]
+}
