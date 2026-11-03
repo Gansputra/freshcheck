@@ -5,7 +5,7 @@ import { useCamera } from '@/hooks/useCamera';
 import { useFruitDetectionPipeline } from '@/hooks/useFruitDetectionPipeline';
 import { ScanningOverlay } from './ScanningOverlay';
 import { PredictionPanel } from './PredictionPanel';
-import { createSyntheticSample } from '@/lib/samples/generateSampleImage';
+import { ImageUploadSection } from './ImageUploadSection';
 import {
   Camera,
   CameraOff,
@@ -21,9 +21,14 @@ import {
   ShieldAlert,
   Sliders,
   CheckCircle2,
+  Video,
+  FileImage,
 } from 'lucide-react';
 
 export const CameraScanner: React.FC = () => {
+  // Mode selection: 'camera' vs 'upload'
+  const [activeTab, setActiveTab] = useState<'camera' | 'upload'>('camera');
+
   const {
     videoRef,
     status: cameraStatus,
@@ -48,11 +53,6 @@ export const CameraScanner: React.FC = () => {
     clearResult,
   } = useFruitDetectionPipeline({ inferenceIntervalMs: 850 });
 
-  const fileInputRef = useRef<HTMLInputElement>(null);
-  const [selectedImageSrc, setSelectedImageSrc] = useState<string | null>(null);
-  const [activeMode, setActiveMode] = useState<'camera' | 'upload' | 'sample'>('camera');
-  const [isProcessingImage, setIsProcessingImage] = useState(false);
-  const [sampleLabel, setSampleLabel] = useState<string | null>(null);
   const [showSettings, setShowSettings] = useState(false);
   const [isSecureContext, setIsSecureContext] = useState(true);
 
@@ -67,14 +67,28 @@ export const CameraScanner: React.FC = () => {
     initModels();
   }, [initModels]);
 
-  // Manage continuous inference when camera stream is active
+  // Manage continuous inference when camera stream is active and in camera mode
   useEffect(() => {
-    if (cameraStatus === 'active' && videoRef.current && activeMode === 'camera') {
+    if (cameraStatus === 'active' && videoRef.current && activeTab === 'camera') {
       startContinuousInference(videoRef.current);
     } else {
       stopContinuousInference();
     }
-  }, [cameraStatus, activeMode, videoRef, startContinuousInference, stopContinuousInference]);
+  }, [cameraStatus, activeTab, videoRef, startContinuousInference, stopContinuousInference]);
+
+  const handleTabChange = (newTab: 'camera' | 'upload') => {
+    if (newTab === activeTab) return;
+
+    if (newTab === 'upload') {
+      // Stop camera if user switches to upload mode
+      stopContinuousInference();
+      stopCamera();
+      clearResult();
+    } else {
+      clearResult();
+    }
+    setActiveTab(newTab);
+  };
 
   const handleStopCamera = () => {
     stopContinuousInference();
@@ -83,67 +97,16 @@ export const CameraScanner: React.FC = () => {
   };
 
   const handleStartCamera = async () => {
-    setSelectedImageSrc(null);
-    setSampleLabel(null);
-    setActiveMode('camera');
     await startCamera();
   };
 
-  // Image Upload Handler
-  const handleFileUpload = (e: React.ChangeEvent<HTMLInputElement>) => {
-    const file = e.target.files?.[0];
-    if (!file) return;
-
-    if (cameraStatus === 'active') {
-      handleStopCamera();
-    }
-
-    setSampleLabel(file.name);
-    setActiveMode('upload');
-    const reader = new FileReader();
-    reader.onload = async (event) => {
-      const src = event.target?.result as string;
-      setSelectedImageSrc(src);
-
-      const img = new Image();
-      img.crossOrigin = 'anonymous';
-      img.onload = async () => {
-        setIsProcessingImage(true);
-        try {
-          await inferSource(img, img.naturalWidth, img.naturalHeight);
-        } finally {
-          setIsProcessingImage(false);
-        }
-      };
-      img.src = src;
-    };
-    reader.readAsDataURL(file);
-  };
-
-  // Preset Sample Tester
-  const handleTestSample = async (type: 'fresh' | 'semifresh' | 'rotten') => {
-    if (cameraStatus === 'active') {
-      handleStopCamera();
-    }
-
-    const labels = {
-      fresh: 'Fresh Apple Sample',
-      semifresh: 'Semi-Fresh Fruit Sample',
-      rotten: 'Rotten Produce Sample',
-    };
-
-    setSampleLabel(labels[type]);
-    setActiveMode('sample');
-
-    const canvas = createSyntheticSample(type);
-    setSelectedImageSrc(canvas.toDataURL());
-
-    setIsProcessingImage(true);
-    try {
-      await inferSource(canvas, canvas.width, canvas.height);
-    } finally {
-      setIsProcessingImage(false);
-    }
+  // Handler for uploading/inferring from the dedicated upload section
+  const handleInferUploadedImage = async (
+    source: CanvasImageSource,
+    width: number,
+    height: number
+  ) => {
+    await inferSource(source, width, height);
   };
 
   return (
@@ -156,12 +119,19 @@ export const CameraScanner: React.FC = () => {
             <span>Koneksi Bukan HTTPS — Izin Kamera HP Dimatikan Browser</span>
           </div>
           <p className="text-xs sm:text-sm text-rose-100 leading-relaxed">
-            Browser HP (Google Chrome &amp; Safari) secara otomatis <strong>menonaktifkan dialog izin kamera</strong> pada koneksi <code>http://</code> biasa demi alasan privasi.
+            Browser HP (Google Chrome &amp; Safari) secara otomatis{' '}
+            <strong>menonaktifkan dialog izin kamera</strong> pada koneksi <code>http://</code> biasa demi alasan privasi.
           </p>
           <div className="bg-rose-950/60 p-3 rounded-xl text-xs space-y-1 font-mono text-rose-200">
             <div className="font-sans font-bold text-white mb-1">Solusi Mudah:</div>
-            <div>1. Buka terminal baru di PC dan jalankan: <strong className="text-white">npm run tunnel</strong></div>
-            <div>2. Buka link HTTPS resmi yang muncul (contoh: <strong className="text-white">https://xxxx.loca.lt/scanner</strong>) di browser HP Anda.</div>
+            <div>
+              1. Buka terminal baru di PC dan jalankan:{' '}
+              <strong className="text-white">npm run tunnel</strong>
+            </div>
+            <div>
+              2. Buka link HTTPS resmi yang muncul (contoh:{' '}
+              <strong className="text-white">https://xxxx.loca.lt/scanner</strong>) di HP Anda.
+            </div>
           </div>
         </div>
       )}
@@ -196,7 +166,7 @@ export const CameraScanner: React.FC = () => {
         </div>
       )}
 
-      {/* 2. Model Error State Banner */}
+      {/* 2. Model Error State Banner with Retry Button */}
       {modelStatus.overall === 'error' && (
         <div className="bg-rose-50 border border-rose-200 text-rose-900 p-4 rounded-2xl space-y-3">
           <div className="flex items-center justify-between">
@@ -222,248 +192,253 @@ export const CameraScanner: React.FC = () => {
       )}
 
       {/* 3. Camera Permission Denied / Error Banner */}
-      {(cameraStatus === 'denied' || cameraStatus === 'error' || cameraStatus === 'unsupported') && (
-        <div className="bg-amber-50 border border-amber-200 text-amber-950 p-5 rounded-2xl space-y-3">
-          <div className="flex items-start gap-3">
-            <AlertTriangle className="w-5 h-5 text-amber-600 shrink-0 mt-0.5" />
-            <div className="space-y-1">
-              <h4 className="font-semibold text-sm">Pemberitahuan Izin Kamera</h4>
-              <p className="text-xs sm:text-sm text-amber-800 leading-relaxed">
-                {cameraError || 'Kamera tidak dapat diakses.'}
-              </p>
+      {activeTab === 'camera' &&
+        (cameraStatus === 'denied' || cameraStatus === 'error' || cameraStatus === 'unsupported') && (
+          <div className="bg-amber-50 border border-amber-200 text-amber-950 p-5 rounded-2xl space-y-3">
+            <div className="flex items-start gap-3">
+              <AlertTriangle className="w-5 h-5 text-amber-600 shrink-0 mt-0.5" />
+              <div className="space-y-1">
+                <h4 className="font-semibold text-sm">Pemberitahuan Izin Kamera</h4>
+                <p className="text-xs sm:text-sm text-amber-800 leading-relaxed">
+                  {cameraError || 'Kamera tidak dapat diakses.'}
+                </p>
+              </div>
+            </div>
+            <div className="flex flex-wrap items-center gap-3 pt-1">
+              <button
+                onClick={handleStartCamera}
+                className="px-4 py-2 rounded-xl bg-amber-700 text-white text-xs font-semibold hover:bg-amber-800 transition-colors"
+              >
+                Coba Minta Izin Lagi
+              </button>
+              <button
+                onClick={() => handleTabChange('upload')}
+                className="px-4 py-2 rounded-xl bg-white border border-amber-300 text-amber-900 text-xs font-semibold hover:bg-amber-100 transition-colors flex items-center gap-1.5"
+              >
+                <Upload className="w-3.5 h-3.5" />
+                <span>Gunakan Menu Upload Foto</span>
+              </button>
             </div>
           </div>
-          <div className="flex flex-wrap items-center gap-3 pt-1">
-            <button
-              onClick={handleStartCamera}
-              className="px-4 py-2 rounded-xl bg-amber-700 text-white text-xs font-semibold hover:bg-amber-800 transition-colors"
-            >
-              Coba Minta Izin Lagi
-            </button>
-            <button
-              onClick={() => fileInputRef.current?.click()}
-              className="px-4 py-2 rounded-xl bg-white border border-amber-300 text-amber-900 text-xs font-semibold hover:bg-amber-100 transition-colors flex items-center gap-1.5"
-            >
-              <Upload className="w-3.5 h-3.5" />
-              <span>Upload Foto Buah Sebagai Ganti</span>
-            </button>
+        )}
+
+      {/* ========================================================================= */}
+      {/* 4. MODE SWITCHER TABS: [ KAMERA REAL-TIME ] VS [ UPLOAD FOTO ] */}
+      {/* ========================================================================= */}
+      <div className="bg-white rounded-2xl p-1.5 border border-navy-200/80 shadow-xs flex flex-col sm:flex-row items-center justify-between gap-3">
+        {/* Tab Buttons */}
+        <div className="flex items-center gap-1.5 w-full sm:w-auto">
+          <button
+            onClick={() => handleTabChange('camera')}
+            className={`flex-1 sm:flex-none inline-flex items-center justify-center gap-2 px-5 py-2.5 rounded-xl text-sm font-semibold transition-all ${
+              activeTab === 'camera'
+                ? 'bg-forest-900 text-white shadow-sm shadow-forest-900/20'
+                : 'text-navy-600 hover:text-navy-900 hover:bg-navy-50'
+            }`}
+          >
+            <Video className="w-4 h-4 text-forest-300" />
+            <span>Kamera Real-Time</span>
+            {isStreaming && (
+              <span className="w-2 h-2 rounded-full bg-emerald-400 animate-pulse ml-1" />
+            )}
+          </button>
+
+          <button
+            onClick={() => handleTabChange('upload')}
+            className={`flex-1 sm:flex-none inline-flex items-center justify-center gap-2 px-5 py-2.5 rounded-xl text-sm font-semibold transition-all ${
+              activeTab === 'upload'
+                ? 'bg-forest-900 text-white shadow-sm shadow-forest-900/20'
+                : 'text-navy-600 hover:text-navy-900 hover:bg-navy-50'
+            }`}
+          >
+            <FileImage className="w-4 h-4 text-forest-300" />
+            <span>Upload &amp; Analisis Foto</span>
+          </button>
+        </div>
+
+        {/* Pipeline Settings Toggle */}
+        <div className="flex items-center gap-2 self-end sm:self-auto">
+          <button
+            onClick={() => setShowSettings(!showSettings)}
+            className={`inline-flex items-center gap-1.5 px-3 py-2 rounded-xl text-xs font-medium border transition-colors ${
+              showSettings
+                ? 'bg-forest-50 text-forest-900 border-forest-300'
+                : 'bg-navy-50 text-navy-700 border-navy-200 hover:bg-navy-100'
+            }`}
+            title="Pengaturan Threshold & Spesies"
+          >
+            <Sliders className="w-3.5 h-3.5" />
+            <span>Pengaturan AI</span>
+          </button>
+        </div>
+      </div>
+
+      {/* Collapsible Modular Pipeline Settings */}
+      {showSettings && (
+        <div className="p-4 sm:p-5 bg-white rounded-2xl border border-navy-200 text-xs text-navy-800 space-y-3 shadow-xs">
+          <div className="flex items-center justify-between border-b border-navy-100 pb-2">
+            <span className="font-bold text-sm text-navy-950 flex items-center gap-1.5">
+              <Sliders className="w-4 h-4 text-forest-700" />
+              Konfigurasi Pipeline YOLOv8s &amp; MobileNetV3
+            </span>
+            <span className="text-[11px] text-navy-400">Modular Architecture</span>
+          </div>
+
+          <div className="grid grid-cols-1 sm:grid-cols-2 gap-4 pt-1">
+            <div className="p-3.5 rounded-xl bg-navy-50/70 border border-navy-100 space-y-2">
+              <label className="font-semibold flex items-center justify-between text-navy-900">
+                <span>Confidence Threshold YOLO</span>
+                <span className="font-mono text-forest-800 font-bold">
+                  {Math.round(pipelineConfig.confidenceThreshold * 100)}%
+                </span>
+              </label>
+              <input
+                type="range"
+                min="0.15"
+                max="0.85"
+                step="0.05"
+                value={pipelineConfig.confidenceThreshold}
+                onChange={(e) =>
+                  setPipelineConfig((prev) => ({
+                    ...prev,
+                    confidenceThreshold: parseFloat(e.target.value),
+                  }))
+                }
+                className="w-full accent-forest-700"
+              />
+              <p className="text-[11px] text-navy-500">
+                Nilai minimal keyakinan deteksi untuk mengenali objek buah dalam frame.
+              </p>
+            </div>
+
+            <div className="p-3.5 rounded-xl bg-navy-50/70 border border-navy-100 space-y-2">
+              <div className="flex items-center justify-between">
+                <span className="font-semibold text-navy-900">Filter Spesies Belum Tervalidasi</span>
+                <input
+                  type="checkbox"
+                  checked={pipelineConfig.excludeUnvalidatedSpecies}
+                  onChange={(e) =>
+                    setPipelineConfig((prev) => ({
+                      ...prev,
+                      excludeUnvalidatedSpecies: e.target.checked,
+                    }))
+                  }
+                  className="w-4 h-4 rounded accent-forest-700"
+                />
+              </div>
+              <p className="text-[11px] text-navy-500 leading-snug">
+                Jika dicentang, buah yang belum memiliki dataset kesegaran tervalidasi (Grape,
+                Pineapple, Watermelon) tidak akan dievaluasi oleh MobileNetV3.
+              </p>
+            </div>
           </div>
         </div>
       )}
 
       {/* ========================================================================= */}
-      {/* 4. UTAMA: AR CAMERA VIEWFINDER DENGAN DETEKSI MULTI-BUAH & HUD REAL-TIME */}
+      {/* 5. TAMPILAN SESUAI TAB YANG DIPILIH */}
       {/* ========================================================================= */}
-      <div className="bg-navy-950 rounded-3xl overflow-hidden shadow-2xl border border-navy-800 relative">
-        {/* Top Viewfinder Bar */}
-        <div className="absolute top-4 left-4 right-4 z-30 flex items-center justify-between pointer-events-none">
-          <div className="bg-navy-950/80 backdrop-blur-md px-3.5 py-1.5 rounded-full border border-white/10 text-xs text-white font-medium flex items-center gap-2">
-            <Scan className="w-3.5 h-3.5 text-forest-400" />
-            <span>YOLOv8s + MobileNetV3 Scanner</span>
-          </div>
 
-          <div className="flex items-center gap-2">
-            {isStreaming && (
-              <div className="bg-emerald-950/80 backdrop-blur-md px-3 py-1.5 rounded-full border border-emerald-500/30 text-xs font-semibold text-emerald-300 flex items-center gap-2">
-                <span className="w-2 h-2 rounded-full bg-emerald-400 animate-pulse" />
-                <span>LIVE</span>
-              </div>
-            )}
-          </div>
-        </div>
-
-        {/* Viewport Frame */}
-        <div className="relative aspect-[4/3] sm:aspect-[16/10] md:aspect-[16/9] w-full flex items-center justify-center bg-black">
-          {/* Live Camera Video */}
-          <video
-            ref={videoRef}
-            playsInline
-            muted
-            autoPlay
-            className={`w-full h-full object-cover transition-opacity duration-300 ${
-              activeMode === 'camera' && isStreaming ? 'opacity-100' : 'opacity-0'
-            }`}
-          />
-
-          {/* Upload / Preset Static Image Preview */}
-          {(activeMode === 'upload' || activeMode === 'sample') && selectedImageSrc && (
-            <div className="absolute inset-0 flex items-center justify-center p-4 bg-navy-950">
-              {/* eslint-disable-next-line @next/next/no-img-element */}
-              <img
-                src={selectedImageSrc}
-                alt="Produce Sample"
-                className="max-w-full max-h-full object-contain rounded-2xl shadow-xl"
-              />
-              <div className="absolute top-4 left-4 bg-navy-900/90 backdrop-blur-md px-3 py-1 rounded-full text-xs text-navy-200 border border-white/10 flex items-center gap-1.5">
-                <Sparkles className="w-3.5 h-3.5 text-forest-400" />
-                <span>{sampleLabel || 'Test Sample'}</span>
-              </div>
-            </div>
-          )}
-
-          {/* In-Camera Detection Bounding Boxes & AR Overlay */}
-          <ScanningOverlay
-            status={cameraStatus}
-            errorMessage={cameraError}
-            pipelineResult={pipelineResult}
-            progress={progress}
-            isInferring={isInferring || isProcessingImage}
-            onRequestStart={handleStartCamera}
-          />
-        </div>
-
-        {/* Viewfinder Controls Toolbar */}
-        <div className="p-4 sm:p-5 bg-navy-900/95 backdrop-blur-md border-t border-navy-800 flex flex-wrap items-center justify-between gap-4">
-          <div className="flex items-center gap-3">
-            {!isStreaming ? (
-              <button
-                onClick={handleStartCamera}
-                disabled={cameraStatus === 'requesting'}
-                className="inline-flex items-center gap-2 px-6 py-2.5 rounded-xl bg-forest-600 hover:bg-forest-500 disabled:opacity-50 text-white text-sm font-semibold transition-all shadow-md shadow-forest-900/30 active:scale-95"
-              >
-                <Camera className="w-4 h-4 text-forest-200" />
-                <span>
-                  {cameraStatus === 'requesting' ? 'Meminta Izin...' : 'Mulai Kamera'}
-                </span>
-              </button>
-            ) : (
-              <button
-                onClick={handleStopCamera}
-                className="inline-flex items-center gap-2 px-6 py-2.5 rounded-xl bg-rose-700 hover:bg-rose-600 text-white text-sm font-semibold transition-all shadow-md shadow-rose-900/30 active:scale-95"
-              >
-                <CameraOff className="w-4 h-4" />
-                <span>Stop Kamera</span>
-              </button>
-            )}
-
-            {isStreaming && (
-              <button
-                onClick={switchCamera}
-                title="Ganti kamera depan / belakang"
-                className="inline-flex items-center gap-2 px-4 py-2.5 rounded-xl bg-navy-800 hover:bg-navy-700 text-white text-sm font-medium border border-navy-700 transition-colors"
-              >
-                <SwitchCamera className="w-4 h-4 text-forest-400" />
-                <span className="hidden sm:inline">Ganti Kamera</span>
-              </button>
-            )}
-
-            <button
-              onClick={() => setShowSettings(!showSettings)}
-              className={`p-2.5 rounded-xl border transition-colors ${
-                showSettings
-                  ? 'bg-forest-900 text-forest-200 border-forest-500'
-                  : 'bg-navy-800 text-navy-300 border-navy-700 hover:bg-navy-700'
-              }`}
-              title="Pengaturan Pipeline & Validasi Spesies"
-            >
-              <Sliders className="w-4 h-4" />
-            </button>
-          </div>
-
-          <div className="flex items-center gap-2">
-            <input
-              ref={fileInputRef}
-              type="file"
-              accept="image/*"
-              onChange={handleFileUpload}
-              className="hidden"
-            />
-            <button
-              onClick={() => fileInputRef.current?.click()}
-              className="inline-flex items-center gap-1.5 px-3.5 py-2.5 rounded-xl bg-navy-800 hover:bg-navy-700 text-navy-200 border border-navy-700 text-xs sm:text-sm font-medium transition-colors"
-            >
-              <Upload className="w-4 h-4 text-navy-400" />
-              <span>Upload Foto</span>
-            </button>
-
-            <div className="hidden md:flex items-center gap-1.5 pl-2 border-l border-navy-800 text-xs">
-              <button
-                onClick={() => handleTestSample('fresh')}
-                disabled={modelStatus.overall === 'loading' || isInferring}
-                className="px-2.5 py-1.5 rounded-lg bg-emerald-950/70 hover:bg-emerald-900 border border-emerald-500/40 text-emerald-300 font-medium transition-colors"
-              >
-                Fresh Apple
-              </button>
-              <button
-                onClick={() => handleTestSample('semifresh')}
-                disabled={modelStatus.overall === 'loading' || isInferring}
-                className="px-2.5 py-1.5 rounded-lg bg-amber-950/70 hover:bg-amber-900 border border-amber-500/40 text-amber-300 font-medium transition-colors"
-              >
-                Semi-Fresh
-              </button>
-              <button
-                onClick={() => handleTestSample('rotten')}
-                disabled={modelStatus.overall === 'loading' || isInferring}
-                className="px-2.5 py-1.5 rounded-lg bg-rose-950/70 hover:bg-rose-900 border border-rose-500/40 text-rose-300 font-medium transition-colors"
-              >
-                Rotten
-              </button>
-            </div>
-          </div>
-        </div>
-
-        {/* Collapsible Modular Pipeline Settings */}
-        {showSettings && (
-          <div className="p-4 bg-navy-950 border-t border-navy-800 text-xs text-white space-y-3">
-            <div className="flex items-center justify-between">
-              <span className="font-semibold text-sm flex items-center gap-1.5">
-                <Sliders className="w-4 h-4 text-forest-400" />
-                Konfigurasi Pipeline &amp; Validasi Spesies
-              </span>
-              <span className="text-[11px] text-navy-400">Modular Architecture</span>
+      {/* A. SECTION KAMERA REAL-TIME */}
+      {activeTab === 'camera' && (
+        <div className="bg-navy-950 rounded-3xl overflow-hidden shadow-2xl border border-navy-800 relative">
+          {/* Top Viewfinder Bar */}
+          <div className="absolute top-4 left-4 right-4 z-30 flex items-center justify-between pointer-events-none">
+            <div className="bg-navy-950/80 backdrop-blur-md px-3.5 py-1.5 rounded-full border border-white/10 text-xs text-white font-medium flex items-center gap-2">
+              <Scan className="w-3.5 h-3.5 text-forest-400" />
+              <span>Live AR Fruit Tracking</span>
             </div>
 
-            <div className="grid grid-cols-1 sm:grid-cols-2 gap-4 pt-2">
-              <div className="p-3 rounded-xl bg-navy-900/90 border border-navy-800 space-y-1.5">
-                <label className="font-medium flex items-center justify-between">
-                  <span>Confidence Threshold YOLO</span>
-                  <span className="font-mono text-forest-300">
-                    {Math.round(pipelineConfig.confidenceThreshold * 100)}%
-                  </span>
-                </label>
-                <input
-                  type="range"
-                  min="0.15"
-                  max="0.85"
-                  step="0.05"
-                  value={pipelineConfig.confidenceThreshold}
-                  onChange={(e) =>
-                    setPipelineConfig((prev) => ({
-                      ...prev,
-                      confidenceThreshold: parseFloat(e.target.value),
-                    }))
-                  }
-                  className="w-full accent-forest-500"
-                />
-              </div>
-
-              <div className="p-3 rounded-xl bg-navy-900/90 border border-navy-800 space-y-1.5">
-                <div className="flex items-center justify-between">
-                  <span className="font-medium">Filter Spesies Belum Tervalidasi</span>
-                  <input
-                    type="checkbox"
-                    checked={pipelineConfig.excludeUnvalidatedSpecies}
-                    onChange={(e) =>
-                      setPipelineConfig((prev) => ({
-                        ...prev,
-                        excludeUnvalidatedSpecies: e.target.checked,
-                      }))
-                    }
-                    className="w-4 h-4 rounded accent-forest-500"
-                  />
+            <div className="flex items-center gap-2">
+              {isStreaming && (
+                <div className="bg-emerald-950/80 backdrop-blur-md px-3 py-1.5 rounded-full border border-emerald-500/30 text-xs font-semibold text-emerald-300 flex items-center gap-2">
+                  <span className="w-2 h-2 rounded-full bg-emerald-400 animate-pulse" />
+                  <span>LIVE</span>
                 </div>
-                <p className="text-[11px] text-navy-400 leading-snug">
-                  Jika dicentang, buah yang belum memiliki dataset kesegaran tervalidasi (Grape,
-                  Pineapple, Watermelon) tidak akan diproses oleh MobileNetV3.
-                </p>
-              </div>
+              )}
             </div>
           </div>
-        )}
-      </div>
+
+          {/* Viewport Frame */}
+          <div className="relative aspect-[4/3] sm:aspect-[16/10] md:aspect-[16/9] w-full flex items-center justify-center bg-black">
+            {/* Live Camera Video */}
+            <video
+              ref={videoRef}
+              playsInline
+              muted
+              autoPlay
+              className={`w-full h-full object-cover transition-opacity duration-300 ${
+                isStreaming ? 'opacity-100' : 'opacity-0'
+              }`}
+            />
+
+            {/* In-Camera Detection Bounding Boxes & AR Overlay */}
+            <ScanningOverlay
+              status={cameraStatus}
+              errorMessage={cameraError}
+              pipelineResult={pipelineResult}
+              progress={progress}
+              isInferring={isInferring}
+              onRequestStart={handleStartCamera}
+            />
+          </div>
+
+          {/* Viewfinder Controls Toolbar */}
+          <div className="p-4 sm:p-5 bg-navy-900/95 backdrop-blur-md border-t border-navy-800 flex flex-wrap items-center justify-between gap-4">
+            <div className="flex items-center gap-3">
+              {!isStreaming ? (
+                <button
+                  onClick={handleStartCamera}
+                  disabled={cameraStatus === 'requesting'}
+                  className="inline-flex items-center gap-2 px-6 py-2.5 rounded-xl bg-forest-600 hover:bg-forest-500 disabled:opacity-50 text-white text-sm font-semibold transition-all shadow-md shadow-forest-900/30 active:scale-95"
+                >
+                  <Camera className="w-4 h-4 text-forest-200" />
+                  <span>
+                    {cameraStatus === 'requesting' ? 'Meminta Izin...' : 'Mulai Kamera'}
+                  </span>
+                </button>
+              ) : (
+                <button
+                  onClick={handleStopCamera}
+                  className="inline-flex items-center gap-2 px-6 py-2.5 rounded-xl bg-rose-700 hover:bg-rose-600 text-white text-sm font-semibold transition-all shadow-md shadow-rose-900/30 active:scale-95"
+                >
+                  <CameraOff className="w-4 h-4" />
+                  <span>Stop Kamera</span>
+                </button>
+              )}
+
+              {isStreaming && (
+                <button
+                  onClick={switchCamera}
+                  title="Ganti kamera depan / belakang"
+                  className="inline-flex items-center gap-2 px-4 py-2.5 rounded-xl bg-navy-800 hover:bg-navy-700 text-white text-sm font-medium border border-navy-700 transition-colors"
+                >
+                  <SwitchCamera className="w-4 h-4 text-forest-400" />
+                  <span className="hidden sm:inline">Ganti Kamera</span>
+                </button>
+              )}
+            </div>
+
+            <div className="text-xs text-navy-400 font-medium">
+              Mode Kamera: Mendeteksi &amp; Mengklasifikasi Buah Real-Time
+            </div>
+          </div>
+        </div>
+      )}
+
+      {/* B. SECTION UPLOAD FOTO TERPISAH (DEDICATED) */}
+      {activeTab === 'upload' && (
+        <ImageUploadSection
+          onInferImage={handleInferUploadedImage}
+          pipelineResult={pipelineResult}
+          progress={progress}
+          isInferring={isInferring}
+          onClear={clearResult}
+        />
+      )}
 
       {/* ========================================================================= */}
-      {/* 5. PANEL HASIL DETEKSI MULTI-BUAH & TELEMETRI */}
+      {/* 6. PANEL HASIL DETEKSI BUAH & TELEMETRI (MUNCUL UNTUK KEDUA MODE) */}
       {/* ========================================================================= */}
       <div className="grid grid-cols-1 lg:grid-cols-12 gap-6 items-start">
         {/* Left: Detailed Results List */}
@@ -471,8 +446,8 @@ export const CameraScanner: React.FC = () => {
           <PredictionPanel
             pipelineResult={pipelineResult}
             progress={progress}
-            isInferring={isInferring || isProcessingImage}
-            isStreaming={isStreaming || activeMode === 'upload' || activeMode === 'sample'}
+            isInferring={isInferring}
+            isStreaming={isStreaming || activeTab === 'upload'}
           />
         </div>
 
@@ -493,7 +468,9 @@ export const CameraScanner: React.FC = () => {
               <div className="p-2.5 rounded-lg bg-navy-50/70 border border-navy-100 flex items-center justify-between">
                 <div>
                   <span className="font-bold text-navy-950 block">Stage 1: YOLOv8s</span>
-                  <span className="text-navy-500 text-[11px]">Letterbox 640×640 RGB • 6 Fruit Classes</span>
+                  <span className="text-navy-500 text-[11px]">
+                    Letterbox 640×640 RGB • 6 Fruit Classes
+                  </span>
                 </div>
                 <span className="text-[11px] font-mono font-bold text-forest-700">10 × 8400</span>
               </div>
@@ -501,9 +478,13 @@ export const CameraScanner: React.FC = () => {
               <div className="p-2.5 rounded-lg bg-navy-50/70 border border-navy-100 flex items-center justify-between">
                 <div>
                   <span className="font-bold text-navy-950 block">Stage 2: MobileNetV3-Large</span>
-                  <span className="text-navy-500 text-[11px]">Crop 224×224 • ImageNet Norm • 3 Logits</span>
+                  <span className="text-navy-500 text-[11px]">
+                    Crop 224×224 • ImageNet Norm • 3 Logits
+                  </span>
                 </div>
-                <span className="text-[11px] font-mono font-bold text-forest-700">Fresh/Semi/Rotten</span>
+                <span className="text-[11px] font-mono font-bold text-forest-700">
+                  Fresh/Semi/Rotten
+                </span>
               </div>
             </div>
           </div>
